@@ -1,12 +1,20 @@
 module Query
 
-open System
-
+[<CLIMutable>]
 type Document = {
     Id: string
     Title: string
     Body: string
     Version: int64
-    CreatedAt: DateTime
-    UpdatedAt: DateTime
+    CreatedAt: string
+    UpdatedAt: string
+}
+
+[<CLIMutable>]
+type DocumentVersion = {
+    Id: string
+    Version: int64
+    Title: string
+    Body: string
+    CreatedAt: string
 }

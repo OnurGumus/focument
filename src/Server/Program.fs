@@ -1,12 +1,10 @@
-﻿open System
+open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
 open FCQRS
 open FCQRS.Model.Data
 open Command
-open Model.Command
-open FsToolkit.ErrorHandling
 
 let logf = LoggerFactory.Create(fun x -> x.AddConsole() |> ignore)
 
@@ -17,56 +15,43 @@ let connection = {
     Actor.DBType = Actor.Sqlite
     Actor.ConnectionString = connectionString |> ValueLens.TryCreate |> Result.value
 }
+
 let cid () : CID =
     Guid.CreateVersion7().ToString() |> ValueLens.CreateAsResult |> Result.value
 
+// Initialize projection tables
+Projection.ensureTables connectionString
 
 let builder = WebApplication.CreateBuilder()
 
 let actorApi =
-    Actor.api  builder.Configuration logf (Some connection) ("FocumentCluster" |> ValueLens.TryCreate |> Result.value)
+    Actor.api builder.Configuration logf (Some connection) ("FocumentCluster" |> ValueLens.TryCreate |> Result.value)
 
+// Initialize projection subscription
+let lastOffset = Projection.getLastOffset connectionString
+let subs = Query.init<IMessageWithCID, _, _> actorApi (int lastOffset) (Projection.handleEventWrapper logf connectionString)
 
 let commandHandler = CommandHandler.api actorApi
 
 let app = builder.Build()
 
+app.UseRouting() |> ignore
+
+// Prevent caching for API routes
+app.Use(Func<HttpContext, Func<Threading.Tasks.Task>, _>(fun ctx next ->
+    if ctx.Request.Path.StartsWithSegments "/api" then
+        ctx.Response.Headers["Cache-Control"] <- "no-cache, no-store, must-revalidate"
+        ctx.Response.Headers["Pragma"] <- "no-cache"
+        ctx.Response.Headers["Expires"] <- "0"
+    next.Invoke()
+)) |> ignore
+
 app.UseDefaultFiles() |> ignore
 app.UseStaticFiles() |> ignore
 
-app.MapGet("/document", Func<string>(fun () -> "Use POST to submit a document")) |> ignore
-
-app.MapPost(
-    "/document",
-    Func<HttpContext, _>(fun ctx -> task {
-        let! result = taskResult {
-            let! form = ctx.Request.ReadFormAsync()
-            let title = form["Title"].ToString()
-            let content = form["Content"].ToString()
-            let! aggregateId: AggregateId = title |> ValueLens.CreateAsResult
-            let docId: DocumentId = Guid.NewGuid() |> ValueLens.Create
-            let! title: Title = title |> ValueLens.CreateAsResult
-            let! content: Content = content |> ValueLens.CreateAsResult
-
-            let document: Document = {
-                Id = docId
-                Title = title
-                Content = content
-            }
-            let! res =
-                commandHandler.DocumentHandler
-                    (fun _ -> true)
-                    (cid())
-                    aggregateId
-                    (Document.CreateOrUpdate document)
-            printfn "Handler result: %A" res
-            return "Document received!"
-        }
-        return match result with
-               | Ok msg -> msg
-               | Error err -> $"Error: %A{err}"
-    })
-)
-|> ignore
+app.MapGet("/api/documents", Func<_>(Handlers.getDocuments connectionString)) |> ignore
+app.MapGet("/api/document/{id}/history", Func<HttpContext, _>(Handlers.getDocumentHistory connectionString)) |> ignore
+app.MapPost("/api/document", Func<HttpContext, _>(Handlers.createOrUpdateDocument connectionString cid subs commandHandler)) |> ignore
+app.MapPost("/api/document/restore", Func<HttpContext, _>(Handlers.restoreVersion connectionString cid subs commandHandler)) |> ignore
 
 app.Run()

@@ -86,6 +86,7 @@ NUGET
       Akka.Streams (>= 1.5.37)
       Akkling (>= 0.17)
       FSharp.Core (>= 8.0.400)
+    Dapper (2.1.66)
     DotNetty.Buffers (0.7.6)
       DotNetty.Common (>= 0.7.6)
       System.Runtime.CompilerServices.Unsafe (>= 5.0)

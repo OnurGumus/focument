@@ -6,3 +6,4 @@ nuget FSharp.Core content: none
 nuget FCQRS.Model
 nuget FCQRS
 nuget FsToolkit.ErrorHandling
+nuget Dapper

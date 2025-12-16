@@ -5,9 +5,15 @@
     <NoWarn>$(NoWarn);NU1510</NoWarn>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Projection.fs" />
     <Compile Include="Command.fs" />
     <Compile Include="CommandHandler.fs" />
+    <Compile Include="Handlers.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Watch Remove="**/*.tmp*" />
+     <Watch Remove="**/*.db*" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Model\Model.fsproj" />
