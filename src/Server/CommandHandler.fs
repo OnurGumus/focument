@@ -12,3 +12,4 @@ let api (actorApi: IActor) : ICommandHandlers =
     { new ICommandHandlers with
         member _.DocumentHandler = Document.Shard.Handler actorApi
     }
+
