@@ -7,3 +7,4 @@ nuget FCQRS.Model
 nuget FCQRS
 nuget FsToolkit.ErrorHandling
 nuget Dapper
+nuget Microsoft.Data.Sqlite
