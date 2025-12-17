@@ -58,6 +58,12 @@ A document history tool that tracks every change to your documents, allowing you
 ### Running the Application
 
 ```bash
+./buildandrun.sh
+```
+
+Or manually:
+
+```bash
 # Restore dependencies
 dotnet paket install
 
