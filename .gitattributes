@@ -1,0 +1,28 @@
+# Set default behavior to automatically normalize line endings
+* text=auto
+
+# Force batch scripts to always use CRLF
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Force shell scripts to always use LF
+*.sh text eol=lf
+buildandrun.sh text eol=lf
+
+# F# and .NET files
+*.fs text eol=lf
+*.fsx text eol=lf
+*.fsproj text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+
+# Web files
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.json text eol=lf
+
+# Config files
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

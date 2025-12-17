@@ -50,6 +50,9 @@ type Document = {
             let! content = content |> ValueLens.CreateAsResult
             return { Id = docId; Title = title; Content = content }
         }
+     member this.IsValid = 
+        this.Id.IsValid && this.Title.IsValid && this.Content.IsValid
+    override this.ToString() = this.IsValid.ToString()
 
 
 module Document =
