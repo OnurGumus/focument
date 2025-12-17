@@ -8,3 +8,4 @@ nuget FCQRS
 nuget FsToolkit.ErrorHandling
 nuget Dapper
 nuget Microsoft.Data.Sqlite
+nuget linq2db 5.4.1

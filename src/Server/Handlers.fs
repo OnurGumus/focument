@@ -32,27 +32,21 @@ let createOrUpdateDocument
                 let existingId = form["Id"].ToString()
 
                 let docId =
-                    if String.IsNullOrEmpty(existingId) then
+                    if String.IsNullOrEmpty existingId then
                         Guid.NewGuid()
                     else
-                        Guid.Parse(existingId)
+                        Guid.Parse existingId
 
                 let! aggregateId = docId.ToString() |> ValueLens.CreateAsResult
-                let docId = docId |> ValueLens.Create
-                let! title = title |> ValueLens.CreateAsResult
-                let! content = content |> ValueLens.CreateAsResult
+        
 
-                let document: Document = {
-                    Id = docId
-                    Title = title
-                    Content = content
-                }
+                let! document = Document.Create(docId, title, content)
 
                 let correlationId = cid ()
 
-                use awaiter = subs.Subscribe((fun (e: IMessageWithCID) -> e.CID = correlationId), 1)
+                use awaiter = subs.Subscribe((fun e -> e.CID = correlationId), 1)
 
-                let! res =
+                let! _ =
                     commandHandler.DocumentHandler
                         (fun _ -> true)
                         correlationId
@@ -61,7 +55,6 @@ let createOrUpdateDocument
 
                 do! awaiter.Task
 
-                printfn "Handler result: %A" res
                 return "Document received!"
             }
 
@@ -79,32 +72,23 @@ let restoreVersion
     (ctx: HttpContext)
     =
     task {
-        let! form = ctx.Request.ReadFormAsync()
-        let docId = form["Id"].ToString()
-        let version = form["Version"].ToString() |> int64
+        let! result =
+            taskResult {
+                let! form = ctx.Request.ReadFormAsync()
+                let docId = form["Id"].ToString()
+                let version = form["Version"].ToString() |> int64
 
-        let history = ServerQuery.getDocumentHistory connectionString docId
-        let versionData = history |> Seq.tryFind (fun v -> v.Version = version)
+                let history = ServerQuery.getDocumentHistory connectionString docId
+                let! versionData =
+                    history
+                    |> Seq.tryFind (fun v -> v.Version = version)
+                    |> Result.requireSome [ ModelError.OtherError ( "Version not found"  |> ValueLens.TryCreate |>  Result.value)  ]
 
-        match versionData with
-        | None -> return "Error: Version not found"
-        | Some v ->
-            let aggregateIdResult = docId |> ValueLens.CreateAsResult
-            let titleResult = v.Title |> ValueLens.CreateAsResult
-            let contentResult = v.Body |> ValueLens.CreateAsResult
-
-            match aggregateIdResult, titleResult, contentResult with
-            | Ok aggregateId, Ok title, Ok content ->
-                let docIdParsed: DocumentId = Guid.Parse(docId) |> ValueLens.Create
-
-                let document: Document = {
-                    Id = docIdParsed
-                    Title = title
-                    Content = content
-                }
+                let guid = Guid.Parse(docId)
+                let! aggregateId = docId |> ValueLens.CreateAsResult
+                let! document = Document.Create(guid, versionData.Title, versionData.Body)
 
                 let correlationId = cid ()
-
                 use awaiter = subs.Subscribe((fun e -> e.CID = correlationId), 1)
 
                 let! _ =
@@ -117,5 +101,10 @@ let restoreVersion
                 do! awaiter.Task
 
                 return "Version restored!"
-            | _ -> return "Error: Invalid data"
+            }
+
+        return
+            match result with
+            | Ok msg -> msg
+            | Error err -> $"Error: %A{err}"
     }

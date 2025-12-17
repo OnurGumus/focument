@@ -2,6 +2,7 @@
 
 open System
 open FCQRS.Model.Data
+open FsToolkit.ErrorHandling
 
 type DocumentId =
     private
@@ -10,6 +11,12 @@ type DocumentId =
     static member Value_ = (fun (DocumentId id) -> id), (fun (id: Guid) _ -> DocumentId id)
 
     static member Create() = DocumentId(Guid.NewGuid())
+
+    static member CreateFrom(s: string) : Result<DocumentId, ModelError list> =
+        match Guid.TryParse(s) with
+        | true, g -> Ok(DocumentId g)
+        | false, _ -> Error [ ModelError.InvalidGuid ]
+
     member _.IsValid = true
     override this.ToString() = (ValueLens.Value this).ToString()
 
@@ -19,7 +26,7 @@ type Title =
 
     static member Value_ = (fun (Title s) -> s), (fun (s: ShortString) _ -> Title s)
 
-    member _.IsValid = true
+    member this.IsValid = (ValueLens.Value this).IsValid
     override this.ToString() = (ValueLens.Value this).ToString()
 
 type Content =
@@ -28,14 +35,21 @@ type Content =
 
     static member Value_ = (fun (Content s) -> s), (fun (s: LongString) _ -> Content s)
 
-    member _.IsValid = true
+    member this.IsValid = (ValueLens.Value this).IsValid
     override this.ToString() = (ValueLens.Value this).ToString()
 
 type Document = {
     Id: DocumentId
     Title: Title
     Content: Content
-}
+} with
+    static member Create(docId: Guid, title: string, content: string) =
+        result {
+            let docId = docId |> ValueLens.Create
+            let! title = title |> ValueLens.CreateAsResult
+            let! content = content |> ValueLens.CreateAsResult
+            return { Id = docId; Title = title; Content = content }
+        }
 
 
 module Document =
