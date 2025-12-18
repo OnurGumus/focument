@@ -23,7 +23,7 @@ let getLastOffset (connString: string) : int64 =
     conn.Open()
 
     conn.QueryFirstOrDefault<int64>(
-        "SELECT OffsetCount FROM Offsets WHERE OffsetName = @Name",
+        "select OffsetCount from Offsets where OffsetName = @Name",
         {| Name = "DocumentProjection" |}
     )
 
@@ -33,7 +33,7 @@ let getDocuments (connString: string) : Query.Document list =
     conn.Open()
 
     conn.Query<Query.Document>(
-        "SELECT Id, Title, Body, Version, CreatedAt, UpdatedAt FROM Documents ORDER BY UpdatedAt DESC"
+        "select Id, Title, Body, Version, CreatedAt, UpdatedAt from Documents order by UpdatedAt desc"
     )
     |> Seq.toList
 
@@ -43,7 +43,7 @@ let getDocumentHistory (connString: string) (docId: string) : Query.DocumentVers
     conn.Open()
 
     conn.Query<Query.DocumentVersion>(
-        "SELECT Id, Version, Title, Body, CreatedAt FROM DocumentVersions WHERE Id = @Id ORDER BY Version DESC",
+        "select Id, Version, Title, Body, CreatedAt from DocumentVersions where Id = @Id order by Version desc",
         {| Id = docId |}
     )
     |> Seq.toList
