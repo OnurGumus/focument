@@ -169,6 +169,11 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
 
                     [ docEvent :> IMessageWithCID ]
 
+                // Saga events - just pass through for notification
+                | ApprovalCodeSet _ -> [ docEvent :> IMessageWithCID ]
+                | Approved -> [ docEvent :> IMessageWithCID ]
+                | Rejected -> [ docEvent :> IMessageWithCID ]
+
                 | Error _ -> []
 
             | _ -> []

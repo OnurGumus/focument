@@ -26,9 +26,11 @@ open Model.Command.Document
 type State = {
     Document: Document option  // The current document data (None if not created)
     Version: int64             // Optimistic concurrency version counter
+    ApprovalCode: string option
+    IsApproved: bool option
 }
 
-let initialState = { Document = None; Version = 0L }
+let initialState = { Document = None; Version = 0L; ApprovalCode = None; IsApproved = None }
 
 // -----------------------------------------------------------------------------
 // SHARD: The actor implementation following CQRS/ES patterns
@@ -57,6 +59,9 @@ type Shard =
                 Document = Some doc
                 Version = state.Version + 1L
           }
+        | ApprovalCodeSet code -> { state with ApprovalCode = Some code; Version = state.Version + 1L }
+        | Approved -> { state with IsApproved = Some true; Version = state.Version + 1L }
+        | Rejected -> { state with IsApproved = Some false; Version = state.Version + 1L }
         | Error _ -> state  // Error events don't change state
 
     // -------------------------------------------------------------------------
@@ -79,6 +84,10 @@ type Shard =
         | CreateOrUpdate doc, Some existing when existing.Id = doc.Id -> CreatedOrUpdated doc |> PersistEvent
         // Reject: trying to update with wrong ID (business rule violation)
         | CreateOrUpdate _, Some _ -> Error DocumentNotFound |> DeferEvent
+        // Saga commands
+        | SetApprovalCode code, _ -> ApprovalCodeSet code |> PersistEvent
+        | Approve, _ -> Approved |> PersistEvent
+        | Reject, _ -> Rejected |> PersistEvent
 
     // -------------------------------------------------------------------------
     // ACTOR INITIALIZATION

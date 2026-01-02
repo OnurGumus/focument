@@ -26,6 +26,27 @@ let builder = WebApplication.CreateBuilder()
 let actorApi =
     Actor.api builder.Configuration logf (Some connection) ("FocumentCluster" |> ValueLens.TryCreate |> Result.value)
 
+// Initialize document factory first (saga needs it)
+let documentFactory = Document.Shard.Factory actorApi
+
+// Initialize the saga
+let sagaFac = DocumentSaga.init actorApi documentFactory
+let sagaFactory = DocumentSaga.factory actorApi documentFactory
+
+// Initialize saga starter - triggers saga when document is created
+// Note: Use PrefixConversion (Some id) to create saga ID with originator prefix,
+// which is required for correct pub/sub topic subscription
+actorApi.InitializeSagaStarter(fun evt ->
+    match evt with
+    | :? FCQRS.Common.Event<Model.Command.Document.Event> as e ->
+        match e.EventDetails with
+        | Model.Command.Document.CreatedOrUpdated _ ->
+            printfn ">>> Saga starter: CreatedOrUpdated event detected"
+            [ (sagaFactory, id |> Some |> FCQRS.Common.PrefixConversion, evt) ]
+        | _ -> []
+    | _ -> []
+)
+
 // Initialize projection subscription
 let lastOffset = ServerQuery.getLastOffset connectionString
 let subs = Query.init actorApi (int lastOffset) (Projection.handleEventWrapper logf connectionString)

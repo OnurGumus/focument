@@ -97,9 +97,12 @@ type Document = {
 // In Event Sourcing, commands produce events, and events are the source of truth.
 // -----------------------------------------------------------------------------
 module Document =
-    // Commands represent user intentions
+    // Commands represent user intentions (including saga commands)
     type Command =
         | CreateOrUpdate of Document
+        | SetApprovalCode of string
+        | Approve
+        | Reject
 
     // Domain errors (business rule violations)
     type Error =
@@ -108,4 +111,7 @@ module Document =
     // Events represent facts that happened
     type Event =
         | CreatedOrUpdated of Document
+        | ApprovalCodeSet of string
+        | Approved
+        | Rejected
         | Error of Error

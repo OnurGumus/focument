@@ -29,9 +29,7 @@ type ICommandHandlers =
 // InitializeSagaStarter: Required by FCQRS even if not using sagas (pass empty list)
 // -----------------------------------------------------------------------------
 let api (actorApi: IActor) : ICommandHandlers =
-    // Initialize saga starter (returns empty list = no sagas triggered by events)
-    actorApi.InitializeSagaStarter <| fun _ -> []
-
+    // Note: Saga starter is initialized in Program.fs
     // Return object expression implementing ICommandHandlers
     { new ICommandHandlers with
         member _.DocumentHandler = Document.Shard.Handler actorApi
