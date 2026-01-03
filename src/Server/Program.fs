@@ -1,4 +1,4 @@
-open System
+﻿open System
 open System.IO
 open System.Threading.RateLimiting
 open Microsoft.AspNetCore.Builder
@@ -143,7 +143,7 @@ let indexHtmlTemplate =
     if File.Exists(indexHtmlPath) then File.ReadAllText(indexHtmlPath)
     else ""
 
-app.MapGet("/", Func<HttpContext, IResult>(fun ctx ->
+app.MapGet("/", Func<HttpContext, _>(fun ctx ->
     let basePath = (ctx.Request.PathBase.Value |> Option.ofObj |> Option.defaultValue "") + "/"
     let html = indexHtmlTemplate.Replace("{{BASE}}", basePath)
     Results.Content(html, "text/html")
@@ -153,8 +153,8 @@ app.UseDefaultFiles() |> ignore
 app.UseStaticFiles() |> ignore
 
 // API endpoints
-app.MapGet("/api/test", Func<string>(fun () -> "Hello from test!")) |> ignore
-app.MapGet("/api/antiforgery-token", Func<HttpContext, IResult>(fun ctx ->
+app.MapGet("/api/test", Func<_>(fun () -> "Hello from test!")) |> ignore
+app.MapGet("/api/antiforgery-token", Func<HttpContext, _>(fun ctx ->
     let antiforgery = ctx.RequestServices.GetRequiredService<Microsoft.AspNetCore.Antiforgery.IAntiforgery>()
     let tokens = antiforgery.GetAndStoreTokens(ctx)
     Results.Ok({| token = tokens.RequestToken |})
