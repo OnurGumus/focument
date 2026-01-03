@@ -16,36 +16,21 @@ type State =
 type SagaData = { ApprovalCode: string option }
 
 let handleEvent (event: obj) (sagaState: SagaState<SagaData, State option>) =
-    printfn ">>> F# handleEvent: event type = %s, state = %A" (event.GetType().FullName) sagaState.State
     match event, sagaState.State with
     | :? Event<Event> as e, _ ->
-        printfn ">>> F# handleEvent: EventDetails = %A" e.EventDetails
         match e.EventDetails, sagaState.State with
-        | CreatedOrUpdated _, None ->
-            printfn ">>> F# handleEvent: CreatedOrUpdated -> GeneratingCode"
-            GeneratingCode |> StateChangedEvent
-        | ApprovalCodeSet code, Some GeneratingCode ->
-            printfn ">>> F# handleEvent: ApprovalCodeSet -> SendingNotification"
-            SendingNotification code |> StateChangedEvent
-        | Event.Approved, _ ->
-            printfn ">>> F# handleEvent: Approved -> Approved"
-            State.Approved |> StateChangedEvent
-        | Event.Rejected, _ ->
-            printfn ">>> F# handleEvent: Rejected -> Rejected"
-            State.Rejected |> StateChangedEvent
-        | _ ->
-            printfn ">>> F# handleEvent: unhandled event details"
-            UnhandledEvent
-    | _ ->
-        printfn ">>> F# handleEvent: unhandled event type"
-        UnhandledEvent
+        | CreatedOrUpdated _, None -> GeneratingCode |> StateChangedEvent
+        | ApprovalCodeSet code, Some GeneratingCode -> SendingNotification code |> StateChangedEvent
+        | Event.Approved _, _ -> State.Approved |> StateChangedEvent
+        | Event.Rejected _, _ -> State.Rejected |> StateChangedEvent
+        | _ -> UnhandledEvent
+    | _ -> UnhandledEvent
 
 let applySideEffects
     (originatorFactory: string -> Akkling.Cluster.Sharding.IEntityRef<obj>)
     (sagaState: SagaState<SagaData, State>)
     (recovering: bool)
     =
-    printfn ">>> F# applySideEffects: state = %A, recovering = %b" sagaState.State recovering
     let originator =
         FactoryAndName {
             Factory = originatorFactory
@@ -55,39 +40,33 @@ let applySideEffects
     match sagaState.State with
     | GeneratingCode ->
         let code = System.Random.Shared.Next(100000, 999999).ToString()
-        printfn ">>> F# applySideEffects: GeneratingCode -> SetApprovalCode %s" code
         Stay,
         [
             {
                 TargetActor = originator
-                Command = Command.SetApprovalCode code  // Use aggregate's Command type
+                Command = Command.SetApprovalCode code
                 DelayInMs = None
             }
         ]
 
     | SendingNotification code ->
-        // Simulate sending notification, then auto-approve
-        printfn ">>> F# applySideEffects: SendingNotification -> Approve"
         if recovering then
             Stay, []
         else
             NextState (WaitingForApproval code), []
 
     | WaitingForApproval _ ->
-        printfn ">>> F# applySideEffects: WaitingForApproval -> Approve"
         Stay,
         [
             {
                 TargetActor = originator
-                Command = Command.Approve  // Use aggregate's Command type
+                Command = Command.Approve
                 DelayInMs = None
             }
         ]
 
     | State.Approved
-    | State.Rejected ->
-        printfn ">>> F# applySideEffects: Completed -> StopSaga"
-        StopSaga, []
+    | State.Rejected -> StopSaga, []
 
 let apply (sagaState: SagaState<SagaData, SagaStateWrapper<State, Event>>) =
     match sagaState.State with

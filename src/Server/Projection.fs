@@ -35,6 +35,12 @@ let ensureTables (connString: string) =
     use conn = new SqliteConnection(connString)
     conn.Open()
 
+    // SQLite performance optimizations for concurrent read/write
+    conn.Execute("PRAGMA journal_mode=WAL") |> ignore
+    conn.Execute("PRAGMA synchronous=NORMAL") |> ignore
+    conn.Execute("PRAGMA busy_timeout=5000") |> ignore
+    conn.Execute("PRAGMA cache_size=10000") |> ignore
+
     conn.Execute(
         """
         create table if not exists Documents (
@@ -43,11 +49,17 @@ let ensureTables (connString: string) =
             Body text not null,
             Version integer not null,
             CreatedAt text not null,
-            UpdatedAt text not null
+            UpdatedAt text not null,
+            ApprovalStatus text not null default 'Pending'
         )
     """
     )
     |> ignore
+
+    // Migration: Add ApprovalStatus column if it doesn't exist
+    try
+        conn.Execute("ALTER TABLE Documents ADD COLUMN ApprovalStatus TEXT NOT NULL DEFAULT 'Pending'") |> ignore
+    with :? SqliteException -> () // Column already exists
 
     conn.Execute(
         """
@@ -105,7 +117,6 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
         let dataEvent =
             match event with
             | :? Event<Event> as docEvent ->
-                let version = docEvent.Version |> ValueLens.Value
                 let eventTime = docEvent.CreationDate.ToString("o")
 
                 match docEvent.EventDetails with
@@ -113,6 +124,15 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
                     let docId = doc.Id.ToString()
                     let title = doc.Title.ToString()
                     let content = doc.Content.ToString()
+
+                    // Get next document version (only counts CreatedOrUpdated events)
+                    let maxVersion =
+                        conn.QueryFirstOrDefault<Nullable<int64>>(
+                            "select max(Version) from DocumentVersions where Id = @Id",
+                            {| Id = docId |},
+                            transaction
+                        )
+                    let docVersion = if maxVersion.HasValue then maxVersion.Value + 1L else 1L
 
                     let existing =
                         conn.QueryFirstOrDefault<string>(
@@ -123,13 +143,13 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
 
                     if isNull existing then
                         conn.Execute(
-                            """insert into Documents (Id, Title, Body, Version, CreatedAt, UpdatedAt)
-                               values (@Id, @Title, @Body, @Version, @CreatedAt, @UpdatedAt)""",
+                            """insert into Documents (Id, Title, Body, Version, CreatedAt, UpdatedAt, ApprovalStatus)
+                               values (@Id, @Title, @Body, @Version, @CreatedAt, @UpdatedAt, 'Pending')""",
                             {|
                                 Id = docId
                                 Title = title
                                 Body = content
-                                Version = version
+                                Version = docVersion
                                 CreatedAt = eventTime
                                 UpdatedAt = eventTime
                             |},
@@ -139,13 +159,13 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
                     else
                         conn.Execute(
                             """update Documents
-                               set Title = @Title, Body = @Body, Version = @Version, UpdatedAt = @UpdatedAt
+                               set Title = @Title, Body = @Body, Version = @Version, UpdatedAt = @UpdatedAt, ApprovalStatus = 'Pending'
                                where Id = @Id""",
                             {|
                                 Id = docId
                                 Title = title
                                 Body = content
-                                Version = version
+                                Version = docVersion
                                 UpdatedAt = eventTime
                             |},
                             transaction
@@ -158,7 +178,7 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
                            values (@Id, @Version, @Title, @Body, @CreatedAt)""",
                         {|
                             Id = docId
-                            Version = version
+                            Version = docVersion
                             Title = title
                             Body = content
                             CreatedAt = eventTime
@@ -169,10 +189,22 @@ let handleEventWrapper (loggerFactory: ILoggerFactory) (connString: string) (off
 
                     [ docEvent :> IMessageWithCID ]
 
-                // Saga events - just pass through for notification
+                // Saga events - update ApprovalStatus
                 | ApprovalCodeSet _ -> [ docEvent :> IMessageWithCID ]
-                | Approved -> [ docEvent :> IMessageWithCID ]
-                | Rejected -> [ docEvent :> IMessageWithCID ]
+                | Approved docId ->
+                    conn.Execute(
+                        "update Documents set ApprovalStatus = 'Approved', UpdatedAt = @UpdatedAt where Id = @Id",
+                        {| Id = (ValueLens.Value docId).ToString(); UpdatedAt = eventTime |},
+                        transaction
+                    ) |> ignore
+                    [ docEvent :> IMessageWithCID ]
+                | Rejected docId ->
+                    conn.Execute(
+                        "update Documents set ApprovalStatus = 'Rejected', UpdatedAt = @UpdatedAt where Id = @Id",
+                        {| Id = (ValueLens.Value docId).ToString(); UpdatedAt = eventTime |},
+                        transaction
+                    ) |> ignore
+                    [ docEvent :> IMessageWithCID ]
 
                 | Error _ -> []
 

@@ -22,6 +22,7 @@ type Document = {
     Version: int64
     CreatedAt: string
     UpdatedAt: string
+    ApprovalStatus: string
 }
 
 // Historical version of a document (for time-travel/audit)

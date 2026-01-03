@@ -59,9 +59,9 @@ type Shard =
                 Document = Some doc
                 Version = state.Version + 1L
           }
-        | ApprovalCodeSet code -> { state with ApprovalCode = Some code; Version = state.Version + 1L }
-        | Approved -> { state with IsApproved = Some true; Version = state.Version + 1L }
-        | Rejected -> { state with IsApproved = Some false; Version = state.Version + 1L }
+        | ApprovalCodeSet code -> { state with ApprovalCode = Some code }
+        | Approved _ -> { state with IsApproved = Some true }
+        | Rejected _ -> { state with IsApproved = Some false }
         | Error _ -> state  // Error events don't change state
 
     // -------------------------------------------------------------------------
@@ -86,8 +86,10 @@ type Shard =
         | CreateOrUpdate _, Some _ -> Error DocumentNotFound |> DeferEvent
         // Saga commands
         | SetApprovalCode code, _ -> ApprovalCodeSet code |> PersistEvent
-        | Approve, _ -> Approved |> PersistEvent
-        | Reject, _ -> Rejected |> PersistEvent
+        | Approve, Some doc -> Approved doc.Id |> PersistEvent
+        | Reject, Some doc -> Rejected doc.Id |> PersistEvent
+        | Approve, None -> IgnoreEvent
+        | Reject, None -> IgnoreEvent
 
     // -------------------------------------------------------------------------
     // ACTOR INITIALIZATION

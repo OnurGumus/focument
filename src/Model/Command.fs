@@ -112,6 +112,6 @@ module Document =
     type Event =
         | CreatedOrUpdated of Document
         | ApprovalCodeSet of string
-        | Approved
-        | Rejected
+        | Approved of DocumentId
+        | Rejected of DocumentId
         | Error of Error
