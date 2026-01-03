@@ -103,12 +103,28 @@ app.UseForwardedHeaders() |> ignore
 
 // Security headers middleware
 app.Use(fun (context: HttpContext) (next: RequestDelegate) ->
+    let h = context.Response.Headers
+    // Global headers for all responses
+    h["Referrer-Policy"] <- Microsoft.Extensions.Primitives.StringValues("strict-origin-when-cross-origin")
+    h["X-Content-Type-Options"] <- Microsoft.Extensions.Primitives.StringValues("nosniff")
+    h["Permissions-Policy"] <- Microsoft.Extensions.Primitives.StringValues("camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=()")
     task {
-        context.Response.Headers.["X-Content-Type-Options"] <- "nosniff"
-        context.Response.Headers.["X-Frame-Options"] <- "DENY"
-        context.Response.Headers.["X-XSS-Protection"] <- "1; mode=block"
-        context.Response.Headers.["Referrer-Policy"] <- "strict-origin-when-cross-origin"
-        return! next.Invoke(context)
+        do! next.Invoke(context)
+        // Add CSP only for HTML responses
+        let contentType = context.Response.ContentType
+        if not (isNull contentType) && contentType.StartsWith("text/html", StringComparison.OrdinalIgnoreCase) then
+            h["Content-Security-Policy"] <-
+                Microsoft.Extensions.Primitives.StringValues(
+                    "default-src 'self'; " +
+                    "script-src 'self'; " +
+                    "style-src 'self'; " +
+                    "img-src 'self' data:; " +
+                    "font-src 'self'; " +
+                    "connect-src 'self'; " +
+                    "frame-ancestors 'none'; " +
+                    "base-uri 'self'; " +
+                    "form-action 'self'"
+                )
     } :> System.Threading.Tasks.Task
 ) |> ignore
 

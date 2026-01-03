@@ -4,3 +4,5 @@ obj/
 *.db
 .claude/
 *.bin
+*.db-wal
+*.db-shm
