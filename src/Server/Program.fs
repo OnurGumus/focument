@@ -50,16 +50,28 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(fun (
     options.MultipartBodyLengthLimit <- 8192L
 ) |> ignore
 
-// Configure rate limiting
+// Configure rate limiting: 30/min AND 50/hr - both must pass
 builder.Services.AddRateLimiter(fun options ->
+    options.RejectionStatusCode <- StatusCodes.Status429TooManyRequests
     options.AddPolicy("WritePolicy", fun (context: HttpContext) ->
-        RateLimitPartition.GetSlidingWindowLimiter(
-            context.Connection.RemoteIpAddress |> Option.ofObj |> Option.map string |> Option.defaultValue "unknown",
-            fun _ -> SlidingWindowRateLimiterOptions(
+        let key = context.Connection.RemoteIpAddress |> Option.ofObj |> Option.map string |> Option.defaultValue "unknown"
+
+        RateLimitPartition.Get(key, fun _ ->
+            let perMinute = new SlidingWindowRateLimiter(SlidingWindowRateLimiterOptions(
                 PermitLimit = 30,
                 Window = TimeSpan.FromMinutes(1.0),
-                SegmentsPerWindow = 6
-            )
+                SegmentsPerWindow = 6,
+                AutoReplenishment = true
+            ))
+
+            let perHour = new SlidingWindowRateLimiter(SlidingWindowRateLimiterOptions(
+                PermitLimit = 50,
+                Window = TimeSpan.FromHours(1.0),
+                SegmentsPerWindow = 6,
+                AutoReplenishment = true
+            ))
+
+            RateLimiter.CreateChained(perMinute, perHour)
         )
     ) |> ignore
 ) |> ignore
