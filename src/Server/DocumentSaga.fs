@@ -15,6 +15,8 @@ type State =
 
 type SagaData = { ApprovalCode: string option }
 
+// This is a self approving dummy saga. Only for demo purposes.
+
 let handleEvent (event: obj) (sagaState: SagaState<SagaData, State option>) =
     match event, sagaState.State with
     | :? Event<Event> as e, _ ->
@@ -71,27 +73,19 @@ let applySideEffects
 let apply (sagaState: SagaState<SagaData, SagaStateWrapper<State, Event>>) =
     match sagaState.State with
     | UserDefined (SendingNotification code) ->
-        { sagaState with Data = { sagaState.Data with ApprovalCode = Some code } }
+        { sagaState with Data.ApprovalCode = Some code }
     | _ -> sagaState
 
-let mutable private sagaFac: Akkling.Cluster.Sharding.EntityFac<obj> option = None
-
 let init (actorApi: IActor) originatorFactory =
-    let fac =
-        SagaBuilder.init<SagaData, State, Event>
-            actorApi
-            { ApprovalCode = None }
-            handleEvent
-            (applySideEffects originatorFactory)
-            apply
-            originatorFactory
-            "DocumentSaga"
-    sagaFac <- Some fac
-    fac
+    SagaBuilder.init<SagaData, State, Event>
+        actorApi
+        { ApprovalCode = None }
+        handleEvent
+        (applySideEffects originatorFactory)
+        apply
+        originatorFactory
+        "DocumentSaga"
 
 let factory (actorApi: IActor) originatorFactory entityId =
-    let fac =
-        match sagaFac with
-        | Some f -> f
-        | None -> init actorApi originatorFactory
+    let fac = init actorApi originatorFactory
     fac.RefFor DEFAULT_SHARD entityId

@@ -12,6 +12,7 @@
 module Command.Document
 
 open FCQRS.Common
+open FCQRS.Model.Data
 open Model.Command
 open Model.Command.Document
 
@@ -25,8 +26,8 @@ open Model.Command.Document
 // -----------------------------------------------------------------------------
 type State = {
     Document: Document option  // The current document data (None if not created)
-    Version: int64             // Optimistic concurrency version counter
-    ApprovalCode: string option
+    Version: int64             // Document version counter
+    ApprovalCode: ShortString option
     IsApproved: bool option
 }
 
@@ -59,7 +60,8 @@ type Shard =
                 Document = Some doc
                 Version = state.Version + 1L
           }
-        | ApprovalCodeSet code -> { state with ApprovalCode = Some code }
+        | ApprovalCodeSet code ->
+            { state with ApprovalCode = ValueLens.TryCreate<ShortString, _, _> code |> Result.toOption }
         | Approved _ -> { state with IsApproved = Some true }
         | Rejected _ -> { state with IsApproved = Some false }
         | Error _ -> state  // Error events don't change state
