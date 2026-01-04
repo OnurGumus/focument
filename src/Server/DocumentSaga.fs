@@ -2,6 +2,7 @@ module DocumentSaga
 
 open FCQRS.Common
 open FCQRS.Common.SagaBuilder
+open FCQRS.Model.Data
 open Model.Command
 open Model.Command.Document
 open Command.Document
@@ -13,7 +14,7 @@ type State =
     | Approved
     | Rejected
 
-type SagaData = { ApprovalCode: string option }
+type SagaData = { ApprovalCode: ShortString option }
 
 // This is a self approving dummy saga. Only for demo purposes.
 
@@ -73,7 +74,7 @@ let applySideEffects
 let apply (sagaState: SagaState<SagaData, SagaStateWrapper<State, Event>>) =
     match sagaState.State with
     | UserDefined (SendingNotification code) ->
-        { sagaState with Data.ApprovalCode = Some code }
+        { sagaState with Data.ApprovalCode = ValueLens.TryCreate code |> Result.toOption }
     | _ -> sagaState
 
 let init (actorApi: IActor) originatorFactory =
