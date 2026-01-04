@@ -1,11 +1,8 @@
 module DocumentSaga
 
 open FCQRS.Common
-open FCQRS.Common.SagaBuilder
 open FCQRS.Model.Data
-open Model.Command
 open Model.Command.Document
-open Command.Document
 
 type State =
     | GeneratingCode
@@ -18,7 +15,7 @@ type SagaData = { ApprovalCode: ShortString option }
 
 // This is a self approving dummy saga. Only for demo purposes.
 
-let handleEvent (event: obj) (sagaState: SagaState<SagaData, State option>) =
+let handleEvent (event: obj) sagaState =
     match event, sagaState.State with
     | :? Event<Event> as e, _ ->
         match e.EventDetails, sagaState.State with
@@ -30,8 +27,8 @@ let handleEvent (event: obj) (sagaState: SagaState<SagaData, State option>) =
     | _ -> UnhandledEvent
 
 let applySideEffects
-    (originatorFactory: string -> Akkling.Cluster.Sharding.IEntityRef<obj>)
-    (sagaState: SagaState<SagaData, State>)
+    originatorFactory
+    sagaState
     (recovering: bool)
     =
     let originator =
@@ -71,14 +68,15 @@ let applySideEffects
     | State.Approved
     | State.Rejected -> StopSaga, []
 
-let apply (sagaState: SagaState<SagaData, SagaStateWrapper<State, Event>>) =
+let apply (sagaState: SagaState<SagaData, State>) =
+    // Update cross-cutting data based on current state
     match sagaState.State with
-    | UserDefined (SendingNotification code) ->
+    | SendingNotification code ->
         { sagaState with Data.ApprovalCode = ValueLens.TryCreate code |> Result.toOption }
     | _ -> sagaState
 
-let init (actorApi: IActor) originatorFactory =
-    SagaBuilder.init<SagaData, State, Event>
+let init actorApi originatorFactory =
+    SagaBuilder.initSimple<SagaData, State, Event>
         actorApi
         { ApprovalCode = None }
         handleEvent
@@ -87,6 +85,6 @@ let init (actorApi: IActor) originatorFactory =
         originatorFactory
         "DocumentSaga"
 
-let factory (actorApi: IActor) originatorFactory entityId =
+let factory actorApi originatorFactory entityId =
     let fac = init actorApi originatorFactory
     fac.RefFor DEFAULT_SHARD entityId
