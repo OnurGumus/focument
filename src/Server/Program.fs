@@ -89,11 +89,10 @@ let sagaFactory = DocumentSaga.factory actorApi documentFactory
 // Initialize saga starter - triggers saga when document is created
 actorApi.InitializeSagaStarter(fun evt ->
     match evt with
-    | :? FCQRS.Common.Event<Model.Command.Document.Event> as e ->
+    | :? Common.Event<Model.Command.Document.Event> as e ->
         match e.EventDetails with
         | Model.Command.Document.CreatedOrUpdated _ ->
-            printfn ">>> Saga starter: CreatedOrUpdated event detected"
-            [ (sagaFactory, id |> Some |> FCQRS.Common.PrefixConversion, evt) ]
+            [ sagaFactory ]
         | _ -> []
     | _ -> []
 )
