@@ -110,7 +110,7 @@ NUGET
       Microsoft.CSharp (>= 4.7)
       System.ComponentModel (>= 4.3)
     Fable.Package.SDK (1.3.2)
-    FCQRS (5.5)
+    FCQRS (5.5.1)
       Akka.Cluster.Sharding (>= 1.5.57)
       Akka.Cluster.Tools (>= 1.5.57)
       Akka.Persistence.Sql (>= 1.5.55.1)
