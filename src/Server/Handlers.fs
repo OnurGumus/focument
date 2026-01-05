@@ -23,12 +23,18 @@ open System.Diagnostics
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Logging
 open FCQRS
+open FCQRS.Common
 open FCQRS.Model.Data
 open Command
 open Model.Command
 open FsToolkit.ErrorHandling
 
-type ISubscribe<'T> = Query.ISubscribe<'T>
+type ISubscribe<'T when 'T :> IMessageWithCID> = Query.ISubscribe<'T>
+
+let (|DocEvent|_|) (e: IMessageWithCID) =
+    match e with
+    | :? Event<Document.Event> as de -> Some de.EventDetails
+    | _ -> None
 
 // Logger for handlers
 let mutable private logger: ILogger option = None
@@ -122,12 +128,12 @@ let createOrUpdateDocument
 
                 // Subscribe to events with this correlation ID BEFORE sending command
                 // This ensures we don't miss the event due to race conditions
-                use awaiter = subs.Subscribe((fun e -> e.CID = correlationId), 1)
+                use awaiter = subs.Subscribe(correlationId, (function DocEvent (Document.Approved _) -> true | _ -> false), 1)
 
                 // Send command to the actor (this triggers event persistence)
                 let! _ =
                     commandHandler.DocumentHandler
-                        (fun _ -> true)     // Filter function (accept all)
+                        (function |  Document.Approved _  -> true | _ -> false)   
                         correlationId       // For tracking/correlation
                         aggregateId         // Routes to correct actor instance
                         (Document.CreateOrUpdate document)
@@ -203,11 +209,11 @@ let restoreVersion
 
                 // Send as a normal update (creates new version with old content)
                 let correlationId = cid ()
-                use awaiter = subs.Subscribe((fun e -> e.CID = correlationId), 1)
+                use awaiter = subs.Subscribe(correlationId, (function DocEvent (Document.Approved _) -> true | _ -> false), 1)
 
                 let! _ =
                     commandHandler.DocumentHandler
-                        (fun _ -> true)
+                        (function |  Document.Approved _  -> true | _ -> false)   
                         correlationId
                         aggregateId
                         (Document.CreateOrUpdate document)
